@@ -1,3 +1,8 @@
+import numpy as np
+from skimage.color import rgb2gray
+from skimage.filters import laplace
+from scipy.ndimage.filters import convolve
+from PIL import Image
 
 def main():
     print('!')
@@ -7,17 +12,55 @@ class Inpainter:
         self.patch_size = patch_size
 
     def _load_photo(self, path_to_photo):
-        pass
+        self.photo = Image.open(path_to_photo)
+
     def _load_mask(self, path_to_mask):
-        pass
+        self.mask = Image.open(path_to_mask)
+        
     def _validation(self):
+        if self.mask.shape != self.photo[0].shape:
+            raise ValueError
+        
+    def finished(self):
+        return np.sum(self.mask) == 0
+    
+    def update_confidence(self):
+        front_pos = np.argwhere(self.front == 1)
+        new_confidence = np.copy(self.confidence)
+        for point in front_pos:
+            patch = self.get_patch(point)
+            new_confidence[*point] 
+
+    def renew_priority(self):
+        self.update_confidence()
+
+
+    def find_important_region(self):
         pass
+
+    def find_source(self):
+        pass
+
+    def update_image(self):
+        pass
+
+    def get_front(self):
+        self.front = laplace(self.mask) > 0
+
     def inpaint(self, path_to_photo, path_to_mask, path_to_result):
         self._load_photo(path_to_photo)
         self._load_mask(path_to_mask)
         self._validation()
         
-    
+        while not self.finished():
+            self.get_front()
+            self.renew_priority()
+            target_region = self.find_important_region()
+            source_region = self.find_source(target_region)
+            self.update_image()
+        
+        return self.image
+
 
 if __name__=="__main__":
     main()
