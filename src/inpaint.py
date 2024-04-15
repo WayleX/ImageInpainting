@@ -29,7 +29,8 @@ class Inpainter:
         new_confidence = np.copy(self.confidence)
         for point in front_pos:
             patch = self.get_patch(point)
-            new_confidence[*point] 
+            # new_confidence[*point] # Do not work on Python < 3.11
+            new_confidence[point[0], point[1]] = ... 
 
     def renew_priority(self):
         self.update_confidence()
