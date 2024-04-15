@@ -47,6 +47,15 @@ class Inpainter:
     def get_front(self):
         self.front = laplace(self.mask) > 0
 
+    def get_patch(self, point):
+        x_center, y_center = point
+        x_start = max(0, x_center - self.patch_size // 2)
+        x_end = min(self.photo.shape[1], x_center + self.patch_size // 2)
+        y_start = max(0, y_center - self.patch_size // 2)
+        y_end = min(self.photo.shape[0], y_center + self.patch_size // 2)
+
+        return self.photo[y_start:y_end, x_start:x_end]
+
     def inpaint(self, path_to_photo, path_to_mask, path_to_result):
         self._load_photo(path_to_photo)
         self._load_mask(path_to_mask)
