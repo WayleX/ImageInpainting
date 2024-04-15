@@ -12,7 +12,7 @@ class Inpainter:
         self.patch_size = patch_size
 
     def _load_photo(self, path_to_photo):
-        self.photo = Image.open(path_to_photo)
+        self.photo = np.copy(Image.open(path_to_photo))
 
     def _load_mask(self, path_to_mask):
         self.mask = Image.open(path_to_mask)
@@ -57,9 +57,9 @@ class Inpainter:
             self.renew_priority()
             target_region = self.find_important_region()
             source_region = self.find_source(target_region)
-            self.update_image()
+            self.update_image(target_region, source_region)
         
-        return self.image
+        self.photo.save(path_to_result)
 
 
 if __name__=="__main__":
