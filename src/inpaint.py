@@ -36,7 +36,8 @@ class Inpainter:
 
 
     def find_important_region(self):
-        pass
+        pos = np.argmax(self.priority)
+        return pos // self.photo.shape[1], pos % self.photo.shape[1]
 
     def find_source(self):
         pass
