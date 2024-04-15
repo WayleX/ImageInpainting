@@ -47,6 +47,10 @@ class Inpainter:
     def get_front(self):
         self.front = laplace(self.mask) > 0
 
+    @staticmethod
+    def patch_area(patch):
+        return 1 + (patch.shape[0][1] - patch.shape[0][0]) * (patch.shape[1][1] - patch.shape[1][0])
+
     def get_patch(self, point):
         x_center, y_center = point
         x_start = max(0, x_center - self.patch_size // 2)
