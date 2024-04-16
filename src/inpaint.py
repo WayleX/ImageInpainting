@@ -7,7 +7,6 @@ from PIL import Image
 
 def main():
     inp = Inpainter(8)
-    inp._load_mask()
 
 class Inpainter:
     def __init__(self, patch_size):
@@ -32,11 +31,18 @@ class Inpainter:
         new_confidence = np.copy(self.confidence)
         for point in self.front_pos:
             patch = self.get_patch(point)
-            new_confidence[*point] 
+            new_confidence[*point] = np.sum(self._patch_data(patch)) / self._patch_area()
+        self.confidence = new_confidence
+
+    def update_data(self):
+        norm = self.get_normal_matrix()
+        grad = self.get_gradient_matrix()
+        self.data = norm*grad + 0.000001
 
     def renew_priority(self):
         self.update_confidence()
-
+        self.update_data()
+        self.priority = self.confidence * self.data * self.front
 
     def find_important_region(self):
         pass
@@ -46,6 +52,7 @@ class Inpainter:
 
     def update_image(self):
         pass
+
     def get_normal_matrix(self):
         x_sob = sobel(self.mask, 0)
         y_sob = sobel(self.mask, 1)
@@ -74,7 +81,7 @@ class Inpainter:
             max_gradient[*point, 0] = patch_y_gradient[patch_max_pos]
             max_gradient[*point, 1] = patch_x_gradient[patch_max_pos]
 
-        return max_gradient
+        return np.sqrt(max_gradient[:,:,0]**2 + max_gradient[:,:,1]**2)
     
     def get_front(self):
         self.front = laplace(self.mask) > 0
@@ -99,8 +106,12 @@ class Inpainter:
             [max(0, point[1] - np.floor(self.patch_size/2)), min(point[1] + np.ceil(self.patch_size/2), self.width - 1)]
         ]
         return patch
+
     def _patch_data(self, data, patch):
         return data[patch[0][0]: patch[0][1]+1, patch[1][0]: patch[1][1]+1]
+    
+    def _patch_area(self, patch):
+        return (patch[0][0] - patch[0][1])*(patch[1][0] - patch[1][1])
 
 if __name__=="__main__":
     main()
