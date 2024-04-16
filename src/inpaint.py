@@ -66,7 +66,7 @@ class Inpainter:
         grey_img[self.mask == 1] = None
         gradient = np.nan_to_num(np.gradient(grey_img))
         gradient_val = np.sqrt(gradient[0]**2 + gradient[1]**2)
-        max_gradient = np.zeros(self.mask.shape)
+        max_gradient = np.zeros(self.mask.shape[:2], 2)
         for point in self.front_pos:
             patch = self._get_patch(point)
             patch_y_gradient = self._patch_data(gradient[0], patch)
