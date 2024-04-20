@@ -79,7 +79,7 @@ class Inpainter():
                 if self.__patch_data(self.__mask, current_patch_coords).sum() != 0:
                     continue
 
-                diff = self.patch_error(lab_img, current_patch_coords, patch_coords)
+                diff = self.__patch_error(lab_img, current_patch_coords, patch_coords)
 
                 if diff < best_diff:
                     best_diff = diff
@@ -87,7 +87,7 @@ class Inpainter():
 
         return best_patch
     
-    def patch_error(self, image, patch1_coords: tuple, patch2_coords: tuple):
+    def __patch_error(self, image, patch1_coords: tuple, patch2_coords: tuple):
         mask = 1 - self.__patch_data(self.__data, patch1_coords)
         rgb_mask = self._to_rgb(mask)
 
@@ -95,9 +95,18 @@ class Inpainter():
         patch2 = self.__patch_data(image, patch2_coords) * rgb_mask
 
         color_distance = ((patch1 - patch2) ** 2).sum()
-        coords_distance = np.sqrt((patch1_coords[0] - patch2_coords[0]) ** 2 + (patch1_coords[2] - patch2_coords[2]) ** 2)
+        coords_distance = self.__patch_distance(patch1_coords, patch2_coords)
 
         return color_distance + coords_distance
+    
+    def __patch_distance(self, patch1_coords: tuple, patch2_coords: tuple):
+        x1, x2, y1, y2 = patch1_coords
+        x3, x4, y3, y4 = patch2_coords
+
+        x_distance = max(0, max(x1, x3) - min(x2, x4))
+        y_distance = max(0, max(y1, y3) - min(y2, y4))
+
+        return x_distance + y_distance
 
     def __update_front(self):
         self.__front = (laplace(self.__mask) > 0).astype(np.uint8)
@@ -113,11 +122,15 @@ class Inpainter():
         grad = self.__grad()
 
         data = normal * grad
-        self.__data = np.sqrt(data[:, :, 0] ** 2 * data[:, :, 1] ** 2) + 0.001
+        self.__data = np.sqrt(data[:, :, 0] ** 2 + data[:, :, 1] ** 2) + 0.001
 
     def __normal(self):
-        x_sob = sobel(self.__mask, 0)
-        y_sob = sobel(self.__mask, 1)
+        x_kernel = np.array([[.25, 0, -.25], [.5, 0, -.5], [.25, 0, -.25]])
+        y_kernel = np.array([[-.25, -.5, -.25], [0, 0, 0], [.25, .5, .25]])
+
+        x_sob = convolve(self.__mask.astype(float), x_kernel)
+        y_sob = convolve(self.__mask.astype(float), y_kernel)
+
         normal = np.dstack((x_sob, y_sob))
         normalize = np.sqrt(y_sob**2 + x_sob**2).repeat(2).reshape(self.__mask.shape + (2,))
         normalize[normalize == 0] = 1
@@ -156,14 +169,14 @@ class Inpainter():
             coords = self.__patch_coords_by_center((x, y))
             patch_area = self.__patch_area(coords)
 
-            confidence[x, y] = np.sum(np.concatenate(self.__patch_data(self.__confidence, coords))) / patch_area
+            confidence[x, y] = sum(sum(self.__patch_data(self.__confidence, coords))) / patch_area
 
         self.__confidence = confidence
 
     def __check_full_coverage(self):
         return self.__mask.sum() == 0
 
-    def apply(self, mask: np.ndarray, patch_size: int = 8):
+    def apply(self, mask: np.ndarray, patch_size: int = 9):
         if mask.shape != self.__image.shape[:2]:
             raise ValueError("Mask shape must be the same as the image shape")
 
@@ -209,20 +222,24 @@ class Inpainter():
         return self.__image.shape
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python inpaint.py <image>")
+    if len(sys.argv) != 3:
+        print("Usage: python inpaint.py <image> <mask>")
         sys.exit(1)
 
     img_path = sys.argv[1]
+    mask_path = sys.argv[2]
+
+    print("Before inpainting:")
+    Image.open(img_path).show()
 
     inpainter = Inpainter(img_path)
-    mask = np.zeros(inpainter.shape[:2], dtype=np.uint8)
-    mask[0:25, 0:25] = 1
+    mask = np.array(Image.open(mask_path))
+    mask = np.floor(np.sum(mask, axis=2) // 765).astype(np.uint8)
 
-    Image.fromarray(mask * 255).show()
+    print(mask)
 
-    inpainted = inpainter.apply(mask)
-    Image.fromarray(inpainted).show()
+    result = inpainter.apply(mask)
+    Image.fromarray(result).show()
 
 if __name__=="__main__":
     main()
