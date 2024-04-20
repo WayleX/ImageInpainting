@@ -2,7 +2,7 @@ import sys
 import numpy as np
 from skimage.color import rgb2gray, rgb2lab
 from skimage.filters import laplace
-from scipy.ndimage.filters import convolve
+from scipy.ndimage import convolve
 from scipy.ndimage import sobel
 from PIL import Image
 
@@ -19,25 +19,53 @@ class Inpainter():
         self.__confidence = None
         self.__priority = None
 
-        self.__patch_size = 9
+        self.__patch_size = None
 
     def __load_image(self, src: str):
         return np.array(Image.open(src))
 
     def __inpaint(self):
         while not self.__check_full_coverage():
+            # image_prev = np.copy(self.__image)
             self.__update_front()
             self.__update_priority()
             
-            hp_patch_center = self.__highest_priority_patch()
+            hp_patch_center = self.__highest_priority_patch_center()
             new_patch = self.__best_patch(hp_patch_center)
 
             self.__update(hp_patch_center, new_patch)
 
+            print(np.sum(self.__mask))
+            # print(f"Progress: {np.sum(self.__mask) / (self.__width * self.__height) * 100}%")
+
+    def __update(self, hp_pixel, new_patch):
+        hp_patch_coords = self.__patch_coords_by_center(hp_pixel)
+
+        update_positions = np.argwhere(self.__patch_data(self.__mask, hp_patch_coords) == 1) + [hp_patch_coords[0], hp_patch_coords[1]]
+        patch_confidence = self.__confidence[hp_pixel[0], hp_pixel[1]]
+
+        for point in update_positions:
+            self.__confidence[point[0], point[1]] = patch_confidence
+
+        mask = self.__patch_data(self.__mask, hp_patch_coords)
+        rgb_mask = self._to_rgb(mask)
+        old_img_patch = self.__patch_data(self.__image, hp_patch_coords)
+        new_img_patch = self.__patch_data(self.__image, new_patch)
+
+        new = new_img_patch * rgb_mask + old_img_patch * (1 - rgb_mask)
+
+        self.__latch(self.__image, hp_patch_coords, new)
+        self.__latch(self.__mask, hp_patch_coords, 0)
+
+
+    def __latch(self, image, path_coords, path_data):
+        x1, x2, y1, y2 = path_coords
+        image[x1:(x2 + 1), y1:(y2 + 1)] = path_data
+
     def __best_patch(self, center: tuple):
         patch_coords = self.__patch_coords_by_center(center)
-        patch_height = patch_coords[3] - patch_coords[2]
-        patch_width = patch_coords[1] - patch_coords[0]
+        patch_height = patch_coords[3] - patch_coords[2] + 1
+        patch_width = patch_coords[1] - patch_coords[0] + 1
 
         best_patch = None
         best_diff = np.inf
@@ -46,16 +74,16 @@ class Inpainter():
 
         for y in range(self.__height - patch_height + 1):
             for x in range(self.__width - patch_width + 1):
-                current_patch_coords = (x, x + patch_width, y, y + patch_height)
+                current_patch_coords = (x, x + patch_width - 1, y, y + patch_height - 1)
                 
-                if np.any(self.__patch_data(self.__mask, current_patch_coords)):
+                if self.__patch_data(self.__mask, current_patch_coords).sum() != 0:
                     continue
 
-                diff = self.patch_error(current_patch_coords, patch_coords)
+                diff = self.patch_error(lab_img, current_patch_coords, patch_coords)
 
                 if diff < best_diff:
                     best_diff = diff
-                    best_patch = self.__patch_data(lab_img, current_patch_coords)
+                    best_patch = current_patch_coords
 
         return best_patch
     
@@ -66,8 +94,8 @@ class Inpainter():
         patch1 = self.__patch_data(image, patch1_coords) * rgb_mask
         patch2 = self.__patch_data(image, patch2_coords) * rgb_mask
 
-        color_distance = np.sum((patch1 - patch2)**2, axis=2)
-        coords_distance = np.sqrt((patch1_coords[0] - patch2_coords[0])**2 + (patch1_coords[2] - patch2_coords[2])**2)
+        color_distance = ((patch1 - patch2) ** 2).sum()
+        coords_distance = np.sqrt((patch1_coords[0] - patch2_coords[0]) ** 2 + (patch1_coords[2] - patch2_coords[2]) ** 2)
 
         return color_distance + coords_distance
 
@@ -92,7 +120,7 @@ class Inpainter():
         y_sob = sobel(self.__mask, 1)
         normal = np.dstack((x_sob, y_sob))
         normalize = np.sqrt(y_sob**2 + x_sob**2).repeat(2).reshape(self.__mask.shape + (2,))
-        normalize += 0.00001
+        normalize[normalize == 0] = 1
         return normal/normalize
     
     def __grad(self):
@@ -103,9 +131,8 @@ class Inpainter():
         max_gradient = np.zeros((*self.__mask.shape[:2], 2))
         
         front = np.argwhere(self.__front == 1)
-        
+
         for point in front:
-            print(point)
             patch = self.__patch_coords_by_center(point)
             patch_y_gradient = self.__patch_data(gradient[0], patch)
             patch_x_gradient = self.__patch_data(gradient[1], patch)
@@ -119,22 +146,22 @@ class Inpainter():
             max_gradient[point[0], point[1], 0] = patch_y_gradient[patch_max_pos]
             max_gradient[point[0], point[1], 1] = patch_x_gradient[patch_max_pos]
 
-        return np.sqrt(max_gradient[:,:,0]**2 + max_gradient[:,:,1]**2)
+        return max_gradient
 
     def __update_confidence(self):
         confidence = np.copy(self.__confidence)
         front_positions = np.argwhere(self.__front == 1)
 
-        for y, x in front_positions:
+        for x, y in front_positions:
             coords = self.__patch_coords_by_center((x, y))
             patch_area = self.__patch_area(coords)
 
-            confidence[y, x] = np.sum(np.concatenate(self.__patch_data(self.__confidence, coords))) / patch_area
+            confidence[x, y] = np.sum(np.concatenate(self.__patch_data(self.__confidence, coords))) / patch_area
 
         self.__confidence = confidence
 
     def __check_full_coverage(self):
-        return np.sum(self.__mask) == self.__width * self.__height
+        return self.__mask.sum() == 0
 
     def apply(self, mask: np.ndarray, patch_size: int = 8):
         if mask.shape != self.__image.shape[:2]:
@@ -148,23 +175,29 @@ class Inpainter():
         self.__inpaint()
         return np.copy(self.__image)
 
-    def __highest_priority_patch(self):
+    def __highest_priority_patch_center(self):
         return np.unravel_index(self.__priority.argmax(), self.__priority.shape)
 
-    def __patch_coords_by_center(self, center: tuple):
-        x, y = center
-        half_size = self.__patch_size // 2
-        x1, x2 = max(0, x - half_size), min(self.__width, x + half_size)
-        y1, y2 = max(0, y - half_size), min(self.__height, y + half_size)
-        return x1, x2, y1, y2
+    def __patch_coords_by_center(self, point: tuple):
+        half_patch_size = (self.__patch_size - 1) // 2
+        height, width = self.__image.shape[:2]
+
+        patch = [
+            max(0, point[0] - half_patch_size),
+            min(point[0] + half_patch_size, height - 1),
+            max(0, point[1] - half_patch_size),
+            min(point[1] + half_patch_size, width - 1)
+        ]
+
+        return patch
     
     def __patch_data(self, image, patch_coords: tuple):
         x1, x2, y1, y2 = patch_coords
-        return image[y1:y2, x1:x2]
+        return image[x1:x2 + 1, y1:y2 + 1]
     
     def __patch_area(self, patch_coords: tuple):
         x1, x2, y1, y2 = patch_coords
-        return 1 + (x2 - x1) * (y2 - y1)
+        return (1 + x2 - x1) * (1 + y2 - y1)
     
     @staticmethod
     def _to_rgb(image):
@@ -184,9 +217,9 @@ def main():
 
     inpainter = Inpainter(img_path)
     mask = np.zeros(inpainter.shape[:2], dtype=np.uint8)
-    mask[50:100, 50:100] = 1
+    mask[0:25, 0:25] = 1
 
-    # Image.fromarray(mask * 255).show()
+    Image.fromarray(mask * 255).show()
 
     inpainted = inpainter.apply(mask)
     Image.fromarray(inpainted).show()
