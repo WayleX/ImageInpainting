@@ -32,7 +32,7 @@ class Inpainter():
             new_patch = self.__best_patch(hp_patch_center)
 
             self.__update(hp_patch_center, new_patch)
-            print(f"Progress: {(1 - self.__mask.sum() / self.__mask.size) * 100}", end="\r")
+            print(f"Inpainting progress: {(1 - self.__mask.sum() / self.__mask.size) * 100:0.3f}%", end="\r")
 
     def __update(self, hp_pixel, new_patch):
         hp_patch_coords = self.__patch_coords_by_center(hp_pixel)
