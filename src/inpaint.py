@@ -32,6 +32,7 @@ class Inpainter():
             new_patch = self.__best_patch(hp_patch_center)
 
             self.__update(hp_patch_center, new_patch)
+            print(f"Progress: {(1 - self.__mask.sum() / self.__mask.size) * 100}", end="\r")
 
     def __update(self, hp_pixel, new_patch):
         hp_patch_coords = self.__patch_coords_by_center(hp_pixel)
@@ -104,13 +105,10 @@ class Inpainter():
         return color_distance + coords_distance
     
     def __patch_distance(self, patch1_coords: tuple, patch2_coords: tuple):
-        [x1, x2], [y1, y2] = patch1_coords
-        [x3, x4], [y3, y4] = patch2_coords
-
-        x_distance = max(0, max(x1, x3) - min(x2, x4))
-        y_distance = max(0, max(y1, y3) - min(y2, y4))
-
-        return x_distance + y_distance
+        return np.sqrt(
+            (patch1_coords[0][0] - patch2_coords[0][0]) ** 2 +
+            (patch1_coords[1][0] - patch2_coords[1][0]) ** 2
+        )
 
     def __update_front(self):
         self.__front = (laplace(self.__mask) > 0).astype(np.uint8)
