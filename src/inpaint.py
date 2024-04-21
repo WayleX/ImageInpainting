@@ -17,7 +17,6 @@ class Inpainter():
         self.__data = None
         self.__confidence = None
         self.__priority = None
-
         self.__patch_size = None
 
     def __load_image(self, src: str):
@@ -91,7 +90,7 @@ class Inpainter():
                     best_match_difference = difference
 
         return best_match
-    
+
     def __patch_error(self, image, patch1_coords: tuple, patch2_coords: tuple):
         mask = 1 - self.__patch_data(self.__mask, patch1_coords)
         rgb_mask = self._to_rgb(mask)
@@ -116,7 +115,6 @@ class Inpainter():
     def __update_priority(self):
         self.__update_confidence()
         self.__update_data()
-
         self.__priority = self.__confidence * self.__data * self.__front
 
     def __update_data(self):
