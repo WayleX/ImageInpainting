@@ -2,7 +2,7 @@ import sys
 import numpy as np
 from skimage.color import rgb2gray, rgb2lab
 from skimage.filters import laplace
-from scipy.ndimage import sobel
+from scipy.ndimage import convolve
 from PIL import Image
 
 class Inpainter():
@@ -125,14 +125,21 @@ class Inpainter():
         self.__data = np.sqrt(data[:, :, 0] ** 2 + data[:, :, 1] ** 2) + 0.001
 
     def __normal(self):
-        x_sob = sobel(self.__mask, 0)
-        y_sob = sobel(self.__mask, 1)
+        x_kernel = np.array([[.25, 0, -.25], [.5, 0, -.5], [.25, 0, -.25]])
+        y_kernel = np.array([[-.25, -.5, -.25], [0, 0, 0], [.25, .5, .25]])
 
-        normal = np.dstack((x_sob, y_sob))
-        normalize = np.sqrt(y_sob ** 2 + x_sob ** 2).repeat(2).reshape(self.__height, self.__width, 2)
-        normalize[normalize == 0] = 1
-        
-        return normal / normalize
+        x_normal = convolve(self.__mask.astype(float), x_kernel)
+        y_normal = convolve(self.__mask.astype(float), y_kernel)
+        normal = np.dstack((x_normal, y_normal))
+
+        height, width = normal.shape[:2]
+        norm = np.sqrt(y_normal**2 + x_normal**2) \
+                 .reshape(height, width, 1) \
+                 .repeat(2, axis=2)
+        norm[norm == 0] = 1
+
+        unit_normal = normal/norm
+        return unit_normal
     
     def __grad(self):
         grey_img = rgb2gray(self.__image)
