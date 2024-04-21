@@ -227,6 +227,10 @@ def main():
 
     inpainter = Inpainter(img_path)
     mask = np.array(Image.open(mask_path))
+
+    mask[mask < 10] = 0
+    mask[mask > 240] = 255
+
     mask = np.floor(np.sum(mask, axis=2) // 765).astype(np.uint8)
 
     result = inpainter.apply(mask)
