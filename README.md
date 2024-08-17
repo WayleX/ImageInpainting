@@ -1,5 +1,5 @@
 # ImageInpainting
-This is a simple implementation of image inpainting using **Numpy** and **Scipy**. The algorithm is based on the paper "An Image Inpainting Technique Based on the Fast Marching Method" by Alexandru Telea.
+This is a simple implementation of image inpainting using **Numpy** and **Scipy**. The algorithm is based on the paper "Region Filling and Object Removal by Exemplar-Based Image Inpainting" by A. Criminisi, P. Perez and K. Toyama. 
 
 See more in presentation: [ImageInpainting.pdf](image_inpainting.pdf)
 
